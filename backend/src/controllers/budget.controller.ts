@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { CreateBudgetDto, UpdateBudgetDto } from '../dto/budget.dto';
 import { Budget } from '../database/entities/budget.entity';
-import { BudgetService } from '../services/budget.service';
+import { BudgetIndicatorDto, BudgetService } from '../services/budget.service';
 
 @Controller('budgets')
 export class BudgetController {
@@ -28,6 +28,12 @@ export class BudgetController {
   @Get()
   findAll(@Query('month') month?: string): Promise<Budget[]> {
     return this.budgetService.findAll(month);
+  }
+
+  /** Planned vs. realized per week of the month. Declared before ':id'. */
+  @Get('indicator')
+  indicator(@Query('month') month: string): Promise<BudgetIndicatorDto> {
+    return this.budgetService.indicator(month);
   }
 
   @Get(':id')
