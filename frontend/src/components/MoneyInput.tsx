@@ -68,3 +68,4 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(
   },
 );
 MoneyInput.displayName = 'MoneyInput';
+

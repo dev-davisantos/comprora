@@ -68,3 +68,4 @@ export function BudgetProgressBar({
     </div>
   );
 }
+
