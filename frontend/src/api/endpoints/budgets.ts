@@ -38,3 +38,4 @@ export const budgetsApi = {
       `/budgets/indicator?month=${encodeURIComponent(month)}`,
     ),
 };
+

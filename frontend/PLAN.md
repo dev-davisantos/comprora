@@ -92,7 +92,7 @@ Dashboard usa barras CSS (sem lib de gráficos); upgrade opcional: recharts.
 - [x] 6. Purchase orders: formulário criar/editar + vincular projetos
 - [x] 7. Purchase orders: aprovar + transições de status (com confirmação)
 - [x] 8. Budgets: CRUD + indicador semanal (planned/realized/remaining)
-- [ ] 9. Dashboard: cards + rankings + indicador do mês
+- [x] 9. Dashboard: cards + rankings + indicador do mês
 - [ ] 10. Polish: estados vazios, loading, mensagens de erro amigáveis
 
 Cada fase = 1 commit conventional (inglês) + validação (build + smoke manual
