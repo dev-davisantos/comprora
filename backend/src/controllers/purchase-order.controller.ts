@@ -9,9 +9,10 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
-import { CreatePurchaseOrderDto, ChangeStatusDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
+import { ChangeStatusDto, CreatePurchaseOrderDto, SetProjectsDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
 import { PurchaseOrder } from '../database/entities/purchase-order.entity';
 import { PurchaseOrderService } from '../services/purchase-order.service';
 
@@ -53,6 +54,15 @@ export class PurchaseOrderController {
     @Body() changeStatusDto: ChangeStatusDto,
   ): Promise<PurchaseOrder> {
     return this.purchaseOrderService.changeStatus(id, changeStatusDto);
+  }
+
+  /** Replaces the order's linked projects and recalculates their realCost. */
+  @Put(':id/projects')
+  setProjects(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() setProjectsDto: SetProjectsDto,
+  ): Promise<PurchaseOrder> {
+    return this.purchaseOrderService.setProjects(id, setProjectsDto);
   }
 
   @Patch(':id')

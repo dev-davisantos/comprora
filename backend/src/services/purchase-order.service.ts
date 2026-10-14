@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FindOptionsWhere } from 'typeorm';
-import { ChangeStatusDto, CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
+import { ChangeStatusDto, CreatePurchaseOrderDto, SetProjectsDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
 import { BusinessRuleException } from '../exception/business-rule.exception';
 import { OrderStatus } from '../database/enums/order-status.enum';
+import { OrderProject } from '../database/entities/order-project.entity';
+import { Project } from '../database/entities/project.entity';
 import { PurchaseOrder } from '../database/entities/purchase-order.entity';
+import { OrderProjectRepository } from '../database/repositories/order-project.repository';
+import { ProjectRepository } from '../database/repositories/project.repository';
 import { PurchaseOrderRepository } from '../database/repositories/purchase-order.repository';
 import { SegmentRepository } from '../database/repositories/segment.repository';
 import { SectorRepository } from '../database/repositories/sector.repository';
@@ -33,6 +37,8 @@ export class PurchaseOrderService {
     private readonly segmentRepository: SegmentRepository,
     private readonly sectorRepository: SectorRepository,
     private readonly supplierRepository: SupplierRepository,
+    private readonly projectRepository: ProjectRepository,
+    private readonly orderProjectRepository: OrderProjectRepository,
   ) {}
 
   async create(dto: CreatePurchaseOrderDto): Promise<PurchaseOrder> {
@@ -109,7 +115,12 @@ export class PurchaseOrderService {
   async findOne(id: number): Promise<PurchaseOrder> {
     const order = await this.orderRepository.findOne({
       where: { id },
-      relations: { segment: true, sector: true, supplier: true, orderProjects: true },
+      relations: {
+        segment: true,
+        sector: true,
+        supplier: true,
+        orderProjects: { project: true },
+      },
     });
 
     if (!order) {
@@ -159,12 +170,25 @@ export class PurchaseOrderService {
     if (dto.deliveryDeadline !== undefined) order.deliveryDeadline = dto.deliveryDeadline;
     if (dto.deliveryDate !== undefined) order.deliveryDate = new Date(dto.deliveryDate);
 
-    return this.orderRepository.save(order);
+    const saved = await this.orderRepository.save(order);
+
+    // finalValue feeds project.realCost — recompute for linked projects.
+    if (dto.finalValue !== undefined) {
+      await this.recalculateRealCostForOrder(saved);
+    }
+
+    return saved;
   }
 
   async remove(id: number): Promise<void> {
     const order = await this.findOne(id);
+
+    const projectIds = order.orderProjects.map((op) => op.project.id);
+
+    await this.orderProjectRepository.delete({ order: { id: order.id } });
     await this.orderRepository.remove(order);
+
+    await this.recalculateRealCost(projectIds);
   }
 
   /**
@@ -211,7 +235,75 @@ export class PurchaseOrderService {
       order.authorizationDate = new Date();
     }
 
-    return this.orderRepository.save(order);
+    const saved = await this.orderRepository.save(order);
+
+    // Cancellation changes what counts toward each project's realCost.
+    if (dto.status === OrderStatus.CANCELLED) {
+      await this.recalculateRealCostForOrder(saved);
+    }
+
+    return saved;
+  }
+
+  /**
+   * `PUT /purchase-orders/:id/projects` — replaces the linked projects (N–N)
+   * and recalculates realCost on every affected project.
+   */
+  async setProjects(id: number, dto: SetProjectsDto): Promise<PurchaseOrder> {
+    const order = await this.findOne(id);
+
+    const previousProjectIds = order.orderProjects.map((op) => op.project.id);
+
+    const projects: Project[] = [];
+    for (const projectId of dto.projectIds) {
+      const project = await this.projectRepository.findOne({ where: { id: projectId } });
+      if (!project) {
+        throw new NotFoundException(`Project with id ${projectId} not found`);
+      }
+      projects.push(project);
+    }
+
+    await this.orderProjectRepository.delete({ order: { id: order.id } });
+
+    for (const project of projects) {
+      const link = this.orderProjectRepository.create({ order, project });
+      await this.orderProjectRepository.save(link);
+    }
+
+    const affected = new Set([...previousProjectIds, ...dto.projectIds]);
+    await this.recalculateRealCost([...affected]);
+
+    return this.findOne(id);
+  }
+
+  /**
+   * Project.realCost = SUM of finalValue of linked orders, excluding CANCELLED.
+   */
+  private async recalculateRealCost(projectIds: number[]): Promise<void> {
+    for (const projectId of projectIds) {
+      const row = await this.orderProjectRepository
+        .createQueryBuilder('op')
+        .innerJoin('op.order', 'order')
+        .select('COALESCE(SUM(order.finalValue), 0)', 'total')
+        .where('op.project_id = :projectId', { projectId })
+        .andWhere('order.status != :cancelled', { cancelled: OrderStatus.CANCELLED })
+        .getRawOne<{ total: string }>();
+
+      const project = await this.projectRepository.findOne({ where: { id: projectId } });
+      if (!project) {
+        continue;
+      }
+
+      project.realCost = Number(row?.total ?? 0).toFixed(2);
+      await this.projectRepository.save(project);
+    }
+  }
+
+  private async recalculateRealCostForOrder(order: PurchaseOrder): Promise<void> {
+    const projectIds = order.orderProjects.map((op) => op.project.id);
+    if (projectIds.length > 0) {
+      await this.recalculateRealCost(projectIds);
+    }
   }
 
   private async loadSectorOfSegment(sectorId: number, segmentId: number) {

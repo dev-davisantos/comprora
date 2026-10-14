@@ -1,5 +1,5 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Length, Matches } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Length, Matches } from 'class-validator';
 import { ServiceType } from '../database/enums/service-type.enum';
 import { OrderStatus } from '../database/enums/order-status.enum';
 import { PaymentCondition } from '../database/enums/payment-condition.enum';
@@ -9,6 +9,13 @@ import { DECIMAL_12_2_MESSAGE, DECIMAL_12_2_REGEX } from './validation';
 export class ChangeStatusDto {
   @IsEnum(OrderStatus)
   status: OrderStatus;
+}
+
+/** Body of `PUT /purchase-orders/:id/projects` — replaces the linked projects. */
+export class SetProjectsDto {
+  @IsArray()
+  @IsInt({ each: true })
+  projectIds: number[];
 }
 
 /**
