@@ -16,6 +16,9 @@ import { dashboardApi } from '@/api/endpoints/dashboard';
 import { MonthPicker } from '@/components/MonthPicker';
 import { BudgetWeeklyIndicator } from '@/components/BudgetWeeklyIndicator';
 import { RankingCard } from '@/components/RankingCard';
+import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
+import { LoadingState } from '@/components/LoadingState';
 import { formatMoney } from '@/utils/format';
 import { cn } from '@/lib/utils';
 
@@ -35,7 +38,14 @@ export function Dashboard() {
     return `${year}-${month}`;
   });
 
-  const { data: summary, isLoading } = useQuery({
+  const {
+    data: summary,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
     queryKey: ['dashboard', selectedMonth],
     queryFn: () => dashboardApi.getSummary(selectedMonth),
     enabled: !!selectedMonth,
@@ -69,13 +79,20 @@ export function Dashboard() {
       </div>
 
       {isLoading ? (
-        <p className="py-8 text-sm text-muted-foreground">
-          Carregando indicadores do dashboard…
-        </p>
+        <LoadingState message="Carregando indicadores do dashboard…" />
+      ) : isError ? (
+        <ErrorState
+          error={error}
+          fallbackMessage="Não foi possível carregar os indicadores do dashboard."
+          onRetry={() => refetch()}
+          isRetrying={isFetching}
+        />
       ) : !summary ? (
-        <div className="rounded-lg border border-border bg-background p-8 text-center text-sm text-muted-foreground">
-          Não foi possível carregar os dados do dashboard para o mês selecionado.
-        </div>
+        <EmptyState
+          icon={Calendar}
+          title="Sem dados para este mês"
+          description="Não há indicadores disponíveis para o mês selecionado."
+        />
       ) : (
         <div className="space-y-6">
           {/* Top KPI Cards */}

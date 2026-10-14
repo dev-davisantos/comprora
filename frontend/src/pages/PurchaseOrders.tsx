@@ -36,6 +36,9 @@ import type {
 import { ApiError } from '@/api/client';
 import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
+import { LoadingState } from '@/components/LoadingState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusTransitionDialog } from '@/components/StatusTransitionDialog';
 import { MonthPicker } from '@/components/MonthPicker';
@@ -158,22 +161,47 @@ export function PurchaseOrders() {
 
   // ---- Queries ------------------------------------------------------------
 
-  const { data: purchaseOrders = [], isLoading: isLoadingOrders } = useQuery({
+  const {
+    data: purchaseOrders = [],
+    isLoading: isLoadingOrders,
+    isError: isOrdersError,
+    error: ordersError,
+    refetch: refetchOrders,
+    isFetching: isFetchingOrders,
+  } = useQuery({
     queryKey: ['purchaseOrders', activeFilters],
     queryFn: () => purchaseOrdersApi.list(activeFilters),
   });
 
-  const { data: suppliers = [] } = useQuery({
+  const {
+    data: suppliers = [],
+    isError: isSuppliersError,
+    error: suppliersError,
+    refetch: refetchSuppliers,
+    isFetching: isFetchingSuppliers,
+  } = useQuery({
     queryKey: ['suppliers'],
     queryFn: () => suppliersApi.list(),
   });
 
-  const { data: segments = [] } = useQuery({
+  const {
+    data: segments = [],
+    isError: isSegmentsError,
+    error: segmentsError,
+    refetch: refetchSegments,
+    isFetching: isFetchingSegments,
+  } = useQuery({
     queryKey: ['segments'],
     queryFn: segmentsApi.list,
   });
 
-  const { data: projects = [] } = useQuery({
+  const {
+    data: projects = [],
+    isError: isProjectsError,
+    error: projectsError,
+    refetch: refetchProjects,
+    isFetching: isFetchingProjects,
+  } = useQuery({
     queryKey: ['projects'],
     queryFn: projectsApi.list,
   });
@@ -206,7 +234,13 @@ export function PurchaseOrders() {
   const isProjectSegment = selectedSegment?.type === 'PROJECT';
 
   // Fetch sectors for the selected segment when STANDARD
-  const { data: segmentSectors = [] } = useQuery({
+  const {
+    data: segmentSectors = [],
+    isError: isSectorsError,
+    error: sectorsError,
+    refetch: refetchSectors,
+    isFetching: isFetchingSectors,
+  } = useQuery({
     queryKey: ['sectors', selectedSegment?.id],
     queryFn: () =>
       selectedSegment ? sectorsApi.list(selectedSegment.id) : [],
@@ -548,28 +582,48 @@ export function PurchaseOrders() {
         </div>
       </div>
 
+      {(isSuppliersError || isSegmentsError || isProjectsError) && (
+        <ErrorState
+          error={suppliersError || segmentsError || projectsError}
+          fallbackMessage="Não foi possível carregar algumas opções dos pedidos. Tente novamente."
+          onRetry={() => {
+            if (isSuppliersError) void refetchSuppliers();
+            if (isSegmentsError) void refetchSegments();
+            if (isProjectsError) void refetchProjects();
+          }}
+          isRetrying={
+            isFetchingSuppliers || isFetchingSegments || isFetchingProjects
+          }
+          className="p-4"
+        />
+      )}
+
       {/* Orders Table */}
       {isLoadingOrders ? (
-        <p className="text-sm text-muted-foreground">Carregando pedidos…</p>
+        <LoadingState message="Carregando pedidos…" />
+      ) : isOrdersError ? (
+        <ErrorState
+          error={ordersError}
+          fallbackMessage="Não foi possível carregar os pedidos."
+          onRetry={() => refetchOrders()}
+          isRetrying={isFetchingOrders}
+        />
       ) : purchaseOrders.length === 0 ? (
-        <div className="rounded-lg border border-border bg-background p-8 text-center">
-          <ShoppingCart className="mx-auto h-8 w-8 text-muted-foreground opacity-50" />
-          <p className="mt-2 text-muted-foreground">
-            {hasActiveFilters
-              ? 'Nenhum pedido encontrado com os filtros selecionados.'
-              : 'Nenhum pedido de compra cadastrado ainda.'}
-          </p>
-          {hasActiveFilters && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={clearFilters}
-              className="mt-4"
-            >
-              Limpar filtros
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          icon={ShoppingCart}
+          title={
+            hasActiveFilters
+              ? 'Nenhum pedido encontrado'
+              : 'Nenhum pedido cadastrado'
+          }
+          description={
+            hasActiveFilters
+              ? 'Não há pedidos que correspondam aos filtros selecionados.'
+              : 'Crie um pedido de compra para começar.'
+          }
+          actionLabel={hasActiveFilters ? 'Limpar filtros' : 'Criar pedido'}
+          onAction={hasActiveFilters ? clearFilters : openCreate}
+        />
       ) : (
         <div className="rounded-lg border border-border bg-background">
           <Table>
@@ -761,6 +815,22 @@ export function PurchaseOrders() {
             </DialogDescription>
           </DialogHeader>
 
+          {(isSuppliersError || isSegmentsError || isProjectsError) && (
+            <ErrorState
+              error={suppliersError || segmentsError || projectsError}
+              fallbackMessage="Não foi possível carregar algumas opções do pedido."
+              onRetry={() => {
+                if (isSuppliersError) void refetchSuppliers();
+                if (isSegmentsError) void refetchSegments();
+                if (isProjectsError) void refetchProjects();
+              }}
+              isRetrying={
+                isFetchingSuppliers || isFetchingSegments || isFetchingProjects
+              }
+              className="p-4"
+            />
+          )}
+
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Linha 1: Emissão e Fornecedor */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -888,6 +958,15 @@ export function PurchaseOrders() {
                 <p className="text-xs text-destructive">
                   {form.formState.errors.segmentId.message}
                 </p>
+              )}
+              {isSectorsError && (
+                <ErrorState
+                  error={sectorsError}
+                  fallbackMessage="Não foi possível carregar os setores deste segmento."
+                  onRetry={() => refetchSectors()}
+                  isRetrying={isFetchingSectors}
+                  className="p-4"
+                />
               )}
             </div>
 

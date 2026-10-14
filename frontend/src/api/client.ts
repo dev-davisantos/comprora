@@ -15,13 +15,52 @@ function toApiError(status: number, payload: unknown): ApiError {
   if (payload && typeof payload === 'object' && 'message' in payload) {
     const message = payload.message;
     if (typeof message === 'string') {
-      return new ApiError(status, message);
+      return new ApiError(status, toFriendlyMessage(status, message));
     }
     if (Array.isArray(message)) {
-      return new ApiError(status, message.join('; '));
+      return new ApiError(status, toFriendlyMessage(status, message.join('; ')));
     }
   }
-  return new ApiError(status, `Erro ${status}`);
+  return new ApiError(status, fallbackMessage(status));
+}
+
+function fallbackMessage(status: number): string {
+  if (status === 400) return 'Verifique os dados informados e tente novamente.';
+  if (status === 404) return 'O registro solicitado não foi encontrado.';
+  if (status === 409) {
+    return 'Não foi possível concluir a operação porque há dados duplicados ou relacionados.';
+  }
+  if (status >= 500) {
+    return 'Não foi possível concluir a solicitação. Tente novamente em instantes e verifique se o serviço da API está disponível.';
+  }
+  return 'Não foi possível concluir a solicitação. Tente novamente.';
+}
+
+function toFriendlyMessage(status: number, message: string): string {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('already exists')) {
+    return 'Já existe um registro com esses dados.';
+  }
+  if (normalized.includes('not found')) {
+    return 'O registro solicitado não foi encontrado.';
+  }
+  if (
+    normalized.includes('cannot be deleted') ||
+    normalized.includes('cannot delete') ||
+    normalized.includes('related data') ||
+    normalized.includes('associated data')
+  ) {
+    return 'Não é possível excluir este registro porque há dados relacionados.';
+  }
+  if (
+    /[ãõáéíóúç]/i.test(message) ||
+    /\b(não|nao|já|ja|obrigatório|inválido)\b/i.test(message)
+  ) {
+    return message;
+  }
+
+  return fallbackMessage(status);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

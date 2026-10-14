@@ -3,13 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Building2 } from 'lucide-react';
 
 import { suppliersApi } from '@/api/endpoints/suppliers';
 import type { Supplier } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
+import { LoadingState } from '@/components/LoadingState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -85,7 +88,14 @@ export function Suppliers() {
 
   // ---- Queries & Mutations ------------------------------------------------
 
-  const { data: suppliers = [], isLoading } = useQuery({
+  const {
+    data: suppliers = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
     queryKey: ['suppliers', search],
     queryFn: () => suppliersApi.list(search || undefined),
   });
@@ -234,15 +244,37 @@ export function Suppliers() {
 
       {/* Table */}
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <LoadingState message="Carregando fornecedores…" />
+      ) : isError ? (
+        <ErrorState
+          error={error}
+          fallbackMessage="Não foi possível carregar os fornecedores."
+          onRetry={() => refetch()}
+          isRetrying={isFetching}
+        />
       ) : suppliers.length === 0 ? (
-        <div className="rounded-lg border border-border bg-background p-8 text-center">
-          <p className="text-muted-foreground">
-            {search
-              ? 'Nenhum fornecedor encontrado para a busca.'
-              : 'Nenhum fornecedor cadastrado.'}
-          </p>
-        </div>
+        <EmptyState
+          icon={Building2}
+          title={
+            search
+              ? 'Nenhum fornecedor encontrado'
+              : 'Nenhum fornecedor cadastrado'
+          }
+          description={
+            search
+              ? 'Tente ajustar os termos da busca ou limpe o filtro.'
+              : 'Cadastre um fornecedor para começar a organizar seus pedidos.'
+          }
+          actionLabel={search ? 'Limpar busca' : 'Cadastrar fornecedor'}
+          onAction={
+            search
+              ? () => {
+                  setSearchInput('');
+                  setSearch('');
+                }
+              : openCreate
+          }
+        />
       ) : (
         <div className="rounded-lg border border-border bg-background">
           <Table>

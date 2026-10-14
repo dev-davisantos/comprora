@@ -11,6 +11,9 @@ import type { Project, ProjectStatus } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
+import { LoadingState } from '@/components/LoadingState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { BudgetProgressBar } from '@/components/BudgetProgressBar';
 import { MoneyInput } from '@/components/MoneyInput';
@@ -97,12 +100,25 @@ export function Projects() {
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
 
   // Queries
-  const { data: projects = [], isLoading: isLoadingProjects } = useQuery({
+  const {
+    data: projects = [],
+    isLoading: isLoadingProjects,
+    isError: isProjectsError,
+    error: projectsError,
+    refetch: refetchProjects,
+    isFetching: isFetchingProjects,
+  } = useQuery({
     queryKey: ['projects'],
     queryFn: projectsApi.list,
   });
 
-  const { data: segments = [] } = useQuery({
+  const {
+    data: segments = [],
+    isError: isSegmentsError,
+    error: segmentsError,
+    refetch: refetchSegments,
+    isFetching: isFetchingSegments,
+  } = useQuery({
     queryKey: ['segments'],
     queryFn: segmentsApi.list,
   });
@@ -238,24 +254,34 @@ export function Projects() {
         </Button>
       </div>
 
+      {isSegmentsError && (
+        <ErrorState
+          error={segmentsError}
+          fallbackMessage="Não foi possível carregar os segmentos para os projetos."
+          onRetry={() => refetchSegments()}
+          isRetrying={isFetchingSegments}
+          className="p-4"
+        />
+      )}
+
       {/* Projects Table */}
       {isLoadingProjects ? (
-        <p className="text-sm text-muted-foreground">Carregando projetos…</p>
+        <LoadingState message="Carregando projetos…" />
+      ) : isProjectsError ? (
+        <ErrorState
+          error={projectsError}
+          fallbackMessage="Não foi possível carregar os projetos."
+          onRetry={() => refetchProjects()}
+          isRetrying={isFetchingProjects}
+        />
       ) : projects.length === 0 ? (
-        <div className="rounded-lg border border-border bg-background p-8 text-center">
-          <FolderKanban className="mx-auto h-8 w-8 text-muted-foreground opacity-50" />
-          <p className="mt-2 text-muted-foreground">
-            Nenhum projeto cadastrado no momento.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={openCreate}
-            className="mt-4"
-          >
-            Cadastrar primeiro projeto
-          </Button>
-        </div>
+        <EmptyState
+          icon={FolderKanban}
+          title="Nenhum projeto cadastrado"
+          description="Cadastre um projeto para acompanhar seu orçamento e custo realizado."
+          actionLabel="Cadastrar primeiro projeto"
+          onAction={openCreate}
+        />
       ) : (
         <div className="rounded-lg border border-border bg-background">
           <Table>
@@ -338,6 +364,16 @@ export function Projects() {
                 : 'Defina os detalhes, segmento e orçamento do projeto.'}
             </DialogDescription>
           </DialogHeader>
+
+          {isSegmentsError && (
+            <ErrorState
+              error={segmentsError}
+              fallbackMessage="Não foi possível carregar os segmentos para este projeto."
+              onRetry={() => refetchSegments()}
+              isRetrying={isFetchingSegments}
+              className="p-4"
+            />
+          )}
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Nome */}

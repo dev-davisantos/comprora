@@ -19,6 +19,9 @@ import type { Segment, Sector, SegmentType } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
+import { LoadingState } from '@/components/LoadingState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,7 +80,14 @@ function SectorList({
   onDeleteSector,
   onAddSector,
 }: SectorListProps) {
-  const { data: sectors = [], isLoading } = useQuery({
+  const {
+    data: sectors = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
     queryKey: ['sectors', segment.id],
     queryFn: () => sectorsApi.list(segment.id),
   });
@@ -101,7 +111,15 @@ function SectorList({
       </div>
 
       {isLoading ? (
-        <p className="py-2 text-xs text-muted-foreground">Carregando setores…</p>
+        <LoadingState message="Carregando setores…" className="p-4" />
+      ) : isError ? (
+        <ErrorState
+          error={error}
+          fallbackMessage="Não foi possível carregar os setores."
+          onRetry={() => refetch()}
+          isRetrying={isFetching}
+          className="p-4"
+        />
       ) : sectors.length === 0 ? (
         <p className="py-2 text-xs italic text-muted-foreground">
           Nenhum setor cadastrado para este segmento.
@@ -172,7 +190,14 @@ export function Segments() {
 
   // ---- Queries & Mutations ------------------------------------------------
 
-  const { data: segments = [], isLoading: isLoadingSegments } = useQuery({
+  const {
+    data: segments = [],
+    isLoading: isLoadingSegments,
+    isError: isSegmentsError,
+    error: segmentsError,
+    refetch: refetchSegments,
+    isFetching: isFetchingSegments,
+  } = useQuery({
     queryKey: ['segments'],
     queryFn: segmentsApi.list,
   });
@@ -390,22 +415,22 @@ export function Segments() {
 
       {/* Segments List */}
       {isLoadingSegments ? (
-        <p className="text-sm text-muted-foreground">Carregando segmentos…</p>
+        <LoadingState message="Carregando segmentos…" />
+      ) : isSegmentsError ? (
+        <ErrorState
+          error={segmentsError}
+          fallbackMessage="Não foi possível carregar os segmentos."
+          onRetry={() => refetchSegments()}
+          isRetrying={isFetchingSegments}
+        />
       ) : segments.length === 0 ? (
-        <div className="rounded-lg border border-border bg-background p-8 text-center">
-          <FolderTree className="mx-auto h-8 w-8 text-muted-foreground opacity-50" />
-          <p className="mt-2 text-muted-foreground">
-            Nenhum segmento cadastrado ainda.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={openCreateSegment}
-            className="mt-4"
-          >
-            Cadastrar primeiro segmento
-          </Button>
-        </div>
+        <EmptyState
+          icon={FolderTree}
+          title="Nenhum segmento cadastrado"
+          description="Cadastre um segmento para organizar setores, projetos e pedidos."
+          actionLabel="Cadastrar primeiro segmento"
+          onAction={openCreateSegment}
+        />
       ) : (
         <div className="space-y-3">
           {segments.map((segment) => {

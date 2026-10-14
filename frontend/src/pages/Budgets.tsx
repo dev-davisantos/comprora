@@ -10,6 +10,9 @@ import type { Budget } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
+import { LoadingState } from '@/components/LoadingState';
 import { MonthPicker } from '@/components/MonthPicker';
 import { MoneyInput } from '@/components/MoneyInput';
 import { BudgetWeeklyIndicator } from '@/components/BudgetWeeklyIndicator';
@@ -86,13 +89,27 @@ export function Budgets() {
 
   // ---- Queries ------------------------------------------------------------
 
-  const { data: indicator, isLoading: isLoadingIndicator } = useQuery({
+  const {
+    data: indicator,
+    isLoading: isLoadingIndicator,
+    isError: isIndicatorError,
+    error: indicatorError,
+    refetch: refetchIndicator,
+    isFetching: isFetchingIndicator,
+  } = useQuery({
     queryKey: ['budgetIndicator', selectedMonth],
     queryFn: () => budgetsApi.getIndicator(selectedMonth),
     enabled: !!selectedMonth,
   });
 
-  const { data: budgets = [], isLoading: isLoadingBudgets } = useQuery({
+  const {
+    data: budgets = [],
+    isLoading: isLoadingBudgets,
+    isError: isBudgetsError,
+    error: budgetsError,
+    refetch: refetchBudgets,
+    isFetching: isFetchingBudgets,
+  } = useQuery({
     queryKey: ['budgets', selectedMonth],
     queryFn: () => budgetsApi.list(selectedMonth),
   });
@@ -242,15 +259,24 @@ export function Budgets() {
         </div>
 
         {isLoadingIndicator ? (
-          <p className="text-sm text-muted-foreground">
-            Calculando indicador semanal…
-          </p>
+          <LoadingState message="Calculando indicador semanal…" className="p-4" />
+        ) : isIndicatorError ? (
+          <ErrorState
+            error={indicatorError}
+            fallbackMessage="Não foi possível carregar o indicador semanal."
+            onRetry={() => refetchIndicator()}
+            isRetrying={isFetchingIndicator}
+            className="p-4"
+          />
         ) : indicator ? (
           <BudgetWeeklyIndicator indicator={indicator} />
         ) : (
-          <div className="rounded-lg border border-border bg-background p-6 text-center text-sm text-muted-foreground">
-            Sem dados de indicador para o mês selecionado.
-          </div>
+          <EmptyState
+            icon={Calendar}
+            title="Sem dados para este mês"
+            description="Cadastre metas semanais para acompanhar o planejado e o realizado."
+            className="p-6"
+          />
         )}
       </div>
 
@@ -263,22 +289,22 @@ export function Budgets() {
         </div>
 
         {isLoadingBudgets ? (
-          <p className="text-sm text-muted-foreground">Carregando metas…</p>
+          <LoadingState message="Carregando metas…" />
+        ) : isBudgetsError ? (
+          <ErrorState
+            error={budgetsError}
+            fallbackMessage="Não foi possível carregar as metas semanais."
+            onRetry={() => refetchBudgets()}
+            isRetrying={isFetchingBudgets}
+          />
         ) : budgets.length === 0 ? (
-          <div className="rounded-lg border border-border bg-background p-8 text-center">
-            <Wallet className="mx-auto h-8 w-8 text-muted-foreground opacity-50" />
-            <p className="mt-2 text-muted-foreground">
-              Nenhuma meta cadastrada para {formatMonthDisplay(selectedMonth)}.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={openCreate}
-              className="mt-4"
-            >
-              Cadastrar meta semanal
-            </Button>
-          </div>
+          <EmptyState
+            icon={Wallet}
+            title="Nenhuma meta semanal cadastrada"
+            description={`Cadastre metas para ${formatMonthDisplay(selectedMonth)} e acompanhe o planejado.`}
+            actionLabel="Cadastrar meta semanal"
+            onAction={openCreate}
+          />
         ) : (
           <div className="rounded-lg border border-border bg-background">
             <Table>
