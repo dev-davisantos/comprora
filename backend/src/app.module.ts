@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { dataSourceOptions } from './config/data-source';
 import { DatabaseModule } from './database/database.module';
+import { BudgetModule } from './budget.module';
 import { ProjectModule } from './project.module';
 import { PurchaseOrderModule } from './purchase-order.module';
 import { SegmentModule } from './segment.module';
@@ -17,6 +18,7 @@ import { SupplierModule } from './supplier.module';
     ProjectModule,
     SupplierModule,
     PurchaseOrderModule,
+    BudgetModule,
   ],
 })
 export class AppModule {}
