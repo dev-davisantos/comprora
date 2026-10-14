@@ -87,7 +87,7 @@ Dashboard usa barras CSS (sem lib de gráficos); upgrade opcional: recharts.
       com nav, API client, TanStack Query, toast, types dos DTOs
 - [x] 2. Suppliers: CRUD + busca + validação CNPJ (14 dígitos)
 - [x] 3. Segments: CRUD de segmento + setores aninhados
-- [ ] 4. Projects: CRUD + barra budget vs realCost
+- [x] 4. Projects: CRUD + barra budget vs realCost
 - [ ] 5. Purchase orders: lista com filtros (status/fornecedor/segmento/projeto/mês)
 - [ ] 6. Purchase orders: formulário criar/editar + vincular projetos
 - [ ] 7. Purchase orders: aprovar + transições de status (com confirmação)

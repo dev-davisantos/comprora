@@ -24,3 +24,4 @@ export const segmentsApi = {
 
   remove: (id: number) => api.delete(`/segments/${id}`),
 };
+

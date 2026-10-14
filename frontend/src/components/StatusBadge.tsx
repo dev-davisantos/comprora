@@ -74,3 +74,4 @@ export function StatusBadge({ type, value }: StatusBadgeProps) {
 
   return null;
 }
+
