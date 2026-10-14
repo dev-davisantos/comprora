@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FindOptionsWhere } from 'typeorm';
-import { CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
+import { ChangeStatusDto, CreatePurchaseOrderDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
 import { BusinessRuleException } from '../exception/business-rule.exception';
+import { OrderStatus } from '../database/enums/order-status.enum';
 import { PurchaseOrder } from '../database/entities/purchase-order.entity';
 import { PurchaseOrderRepository } from '../database/repositories/purchase-order.repository';
 import { SegmentRepository } from '../database/repositories/segment.repository';
@@ -16,6 +17,14 @@ export interface PurchaseOrderFilters {
   /** Month of issueDate, format YYYY-MM */
   month?: string;
 }
+
+const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.PENDING]: [OrderStatus.AUTHORIZED, OrderStatus.CANCELLED],
+  [OrderStatus.AUTHORIZED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
+  [OrderStatus.DELIVERED]: [OrderStatus.INVOICED, OrderStatus.CANCELLED],
+  [OrderStatus.INVOICED]: [OrderStatus.CANCELLED],
+  [OrderStatus.CANCELLED]: [],
+};
 
 @Injectable()
 export class PurchaseOrderService {
@@ -156,6 +165,53 @@ export class PurchaseOrderService {
   async remove(id: number): Promise<void> {
     const order = await this.findOne(id);
     await this.orderRepository.remove(order);
+  }
+
+  /**
+   * `POST /purchase-orders/:id/approve` — sets AUTHORIZED + authorizationDate = now.
+   * Only PENDING orders can be approved.
+   */
+  async approve(id: number): Promise<PurchaseOrder> {
+    const order = await this.findOne(id);
+
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BusinessRuleException(
+        `Only PENDING orders can be approved — order ${id} is ${order.status}`,
+      );
+    }
+
+    order.status = OrderStatus.AUTHORIZED;
+    order.authorizationDate = new Date();
+
+    return this.orderRepository.save(order);
+  }
+
+  /**
+   * `PATCH /purchase-orders/:id/status` — allowed transitions:
+   * PENDING → AUTHORIZED → DELIVERED → INVOICED; CANCELLED from any state.
+   */
+  async changeStatus(id: number, dto: ChangeStatusDto): Promise<PurchaseOrder> {
+    const order = await this.findOne(id);
+
+    if (order.status === dto.status) {
+      throw new BusinessRuleException(`Order ${id} is already ${dto.status}`);
+    }
+
+    const allowed = ALLOWED_TRANSITIONS[order.status] ?? [];
+    if (!allowed.includes(dto.status)) {
+      throw new BusinessRuleException(
+        `Invalid status transition: ${order.status} → ${dto.status} (allowed: ${allowed.join(', ') || 'none'})`,
+      );
+    }
+
+    order.status = dto.status;
+
+    // Authorization date is stamped on any path that authorizes the order.
+    if (dto.status === OrderStatus.AUTHORIZED) {
+      order.authorizationDate = new Date();
+    }
+
+    return this.orderRepository.save(order);
   }
 
   private async loadSectorOfSegment(sectorId: number, segmentId: number) {

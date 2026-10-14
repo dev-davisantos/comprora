@@ -1,9 +1,15 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Length } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Length, Matches } from 'class-validator';
 import { ServiceType } from '../database/enums/service-type.enum';
+import { OrderStatus } from '../database/enums/order-status.enum';
 import { PaymentCondition } from '../database/enums/payment-condition.enum';
 import { DECIMAL_12_2_MESSAGE, DECIMAL_12_2_REGEX } from './validation';
-import { Matches } from 'class-validator';
+
+/** Body of `PATCH /purchase-orders/:id/status`. */
+export class ChangeStatusDto {
+  @IsEnum(OrderStatus)
+  status: OrderStatus;
+}
 
 /**
  * Status is not part of create/update — it moves only through
