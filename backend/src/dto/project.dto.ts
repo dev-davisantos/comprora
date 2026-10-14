@@ -1,8 +1,7 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Length, Matches } from 'class-validator';
 import { ProjectStatus } from '../database/enums/project-status.enum';
 import { DECIMAL_12_2_MESSAGE, DECIMAL_12_2_REGEX } from './validation';
-import { Matches } from 'class-validator';
 
 export class CreateProjectDto {
   @IsString()
@@ -13,6 +12,11 @@ export class CreateProjectDto {
   @IsOptional()
   @IsEnum(ProjectStatus)
   status?: ProjectStatus;
+
+  /** Segment of type PROJECT this project belongs to. */
+  @IsInt()
+  @IsPositive()
+  segmentId: number;
 
   @IsDateString()
   startDate: string;
