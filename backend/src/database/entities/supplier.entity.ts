@@ -1,4 +1,5 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { PurchaseOrder } from './purchase-order.entity';
 
 @Entity({ name: 'suppliers' })
 export class Supplier {
@@ -14,4 +15,7 @@ export class Supplier {
   /** CNPJ stored as digits only (leading zeros preserved), exactly 14 characters. */
   @Column({ type: 'varchar', length: 14, unique: true })
   cnpj: string;
+
+  @OneToMany(() => PurchaseOrder, (order) => order.supplier)
+  orders: PurchaseOrder[];
 }
