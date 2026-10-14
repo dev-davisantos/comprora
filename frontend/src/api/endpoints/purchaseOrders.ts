@@ -78,3 +78,4 @@ export const purchaseOrdersApi = {
   updateProjects: (id: number, projectIds: number[]) =>
     api.put<PurchaseOrder>(`/purchase-orders/${id}/projects`, { projectIds }),
 };
+

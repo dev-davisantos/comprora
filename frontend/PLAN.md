@@ -89,7 +89,7 @@ Dashboard usa barras CSS (sem lib de gráficos); upgrade opcional: recharts.
 - [x] 3. Segments: CRUD de segmento + setores aninhados
 - [x] 4. Projects: CRUD + barra budget vs realCost
 - [x] 5. Purchase orders: lista com filtros (status/fornecedor/segmento/projeto/mês)
-- [ ] 6. Purchase orders: formulário criar/editar + vincular projetos
+- [x] 6. Purchase orders: formulário criar/editar + vincular projetos
 - [ ] 7. Purchase orders: aprovar + transições de status (com confirmação)
 - [ ] 8. Budgets: CRUD + indicador semanal (planned/realized/remaining)
 - [ ] 9. Dashboard: cards + rankings + indicador do mês
