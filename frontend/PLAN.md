@@ -83,7 +83,7 @@ Dashboard usa barras CSS (sem lib de gráficos); upgrade opcional: recharts.
 
 ## 6. Fases de implementação
 
-- [ ] 1. Scaffold: Vite + React + TS + Tailwind + shadcn/ui, proxy, Layout
+- [x] 1. Scaffold: Vite + React + TS + Tailwind + shadcn/ui, proxy, Layout
       com nav, API client, TanStack Query, toast, types dos DTOs
 - [ ] 2. Suppliers: CRUD + busca + validação CNPJ (14 dígitos)
 - [ ] 3. Segments: CRUD de segmento + setores aninhados
