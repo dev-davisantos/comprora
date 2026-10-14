@@ -29,3 +29,4 @@ export const suppliersApi = {
 
   remove: (id: number) => api.delete(`/suppliers/${id}`),
 };
+
