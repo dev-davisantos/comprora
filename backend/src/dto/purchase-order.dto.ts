@@ -1,11 +1,14 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Length } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, Length } from 'class-validator';
 import { ServiceType } from '../database/enums/service-type.enum';
-import { OrderStatus } from '../database/enums/order-status.enum';
 import { PaymentCondition } from '../database/enums/payment-condition.enum';
 import { DECIMAL_12_2_MESSAGE, DECIMAL_12_2_REGEX } from './validation';
-import { IsDateString, Matches } from 'class-validator';
+import { Matches } from 'class-validator';
 
+/**
+ * Status is not part of create/update — it moves only through
+ * `POST /purchase-orders/:id/approve` and `PATCH /purchase-orders/:id/status`.
+ */
 export class CreatePurchaseOrderDto {
   @IsInt()
   @IsPositive()
@@ -65,10 +68,6 @@ export class CreatePurchaseOrderDto {
   @IsOptional()
   @IsDateString()
   deliveryDate?: string;
-
-  @IsOptional()
-  @IsEnum(OrderStatus)
-  status?: OrderStatus;
 }
 
 export class UpdatePurchaseOrderDto extends PartialType(CreatePurchaseOrderDto) {}
