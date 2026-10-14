@@ -2,6 +2,7 @@ import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColum
 import { ProjectStatus } from '../enums/project-status.enum';
 import { OrderProject } from './order-project.entity';
 import { Segment } from './segment.entity';
+import { dateTransformer, moneyTransformer } from '../transformers';
 
 @Entity({ name: 'projects' })
 export class Project {
@@ -14,19 +15,25 @@ export class Project {
   @Column({ type: 'simple-enum', enum: ProjectStatus, default: ProjectStatus.ACTIVE })
   status: ProjectStatus;
 
-  @Column({ type: 'date' })
+  @Column({ type: 'date', transformer: dateTransformer })
   startDate: Date;
 
-  @Column({ type: 'date' })
+  @Column({ type: 'date', transformer: dateTransformer })
   forecastEndDate: Date;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'date', nullable: true, transformer: dateTransformer })
   realEndDate: Date | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: moneyTransformer })
   budget: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: '0' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: '0',
+    transformer: moneyTransformer,
+  })
   realCost: string;
 
   @ManyToOne(() => Segment, { nullable: false })

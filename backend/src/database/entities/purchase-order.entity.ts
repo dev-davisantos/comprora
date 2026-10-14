@@ -2,6 +2,7 @@ import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColum
 import { OrderStatus } from '../enums/order-status.enum';
 import { PaymentCondition } from '../enums/payment-condition.enum';
 import { ServiceType } from '../enums/service-type.enum';
+import { dateTransformer, moneyTransformer } from '../transformers';
 import { OrderProject } from './order-project.entity';
 import { Sector } from './sector.entity';
 import { Segment } from './segment.entity';
@@ -15,7 +16,7 @@ export class PurchaseOrder {
   @Column({ type: 'integer' })
   orderNumber: number;
 
-  @Column({ type: 'date' })
+  @Column({ type: 'date', transformer: dateTransformer })
   issueDate: Date;
 
   /** Explicit even though derivable from sector/project — different meanings. */
@@ -47,13 +48,13 @@ export class PurchaseOrder {
   serviceType: ServiceType;
 
   /** Set when approving the order. */
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'date', nullable: true, transformer: dateTransformer })
   authorizationDate: Date | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: moneyTransformer })
   initialValue: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, transformer: moneyTransformer })
   finalValue: string;
 
   @Column({ type: 'simple-enum', enum: OrderStatus, default: OrderStatus.PENDING })
@@ -71,7 +72,7 @@ export class PurchaseOrder {
   @Column({ type: 'integer' })
   deliveryDeadline: number;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'date', nullable: true, transformer: dateTransformer })
   deliveryDate: Date | null;
 
   @OneToMany(() => OrderProject, (orderProject) => orderProject.order)
