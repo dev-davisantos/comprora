@@ -13,6 +13,8 @@ import {
   Pencil,
   Trash2,
   FolderKanban,
+  CheckCircle2,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 import {
@@ -35,6 +37,7 @@ import { ApiError } from '@/api/client';
 import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { StatusBadge } from '@/components/StatusBadge';
+import { StatusTransitionDialog } from '@/components/StatusTransitionDialog';
 import { MonthPicker } from '@/components/MonthPicker';
 import { MoneyInput } from '@/components/MoneyInput';
 import { Button } from '@/components/ui/button';
@@ -126,6 +129,8 @@ export function PurchaseOrders() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PurchaseOrder | null>(null);
+  const [approvingOrder, setApprovingOrder] = useState<PurchaseOrder | null>(null);
+  const [statusOrder, setStatusOrder] = useState<PurchaseOrder | null>(null);
 
   // Active filters object for API query
   const activeFilters: PurchaseOrderFilters = {
@@ -301,6 +306,43 @@ export function PurchaseOrders() {
     onError: (err) => {
       toast(
         err instanceof ApiError ? err.message : 'Erro ao remover pedido',
+        'destructive',
+      );
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (id: number) => purchaseOrdersApi.approve(id),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      toast(`Pedido #${updated.orderNumber} aprovado com sucesso!`);
+      setApprovingOrder(null);
+    },
+    onError: (err) => {
+      toast(
+        err instanceof ApiError ? err.message : 'Erro ao aprovar pedido',
+        'destructive',
+      );
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: OrderStatus }) =>
+      purchaseOrdersApi.updateStatus(id, status),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      toast(
+        `Status do pedido #${updated.orderNumber} alterado para ${orderStatusLabels[updated.status]}`,
+      );
+      setStatusOrder(null);
+    },
+    onError: (err) => {
+      toast(
+        err instanceof ApiError ? err.message : 'Erro ao alterar status',
         'destructive',
       );
     },
@@ -542,7 +584,7 @@ export function PurchaseOrders() {
                 <TableHead className="text-right">Valor Final</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Entrega</TableHead>
-                <TableHead className="w-20 text-right">Ações</TableHead>
+                <TableHead className="w-36 text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -654,6 +696,30 @@ export function PurchaseOrders() {
                   {/* Ações */}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      {/* Botão rápido de Aprovação quando PENDING */}
+                      {order.status === 'PENDING' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                          onClick={() => setApprovingOrder(order)}
+                          title="Aprovar pedido"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                        </Button>
+                      )}
+
+                      {/* Botão de Transição de Status */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        onClick={() => setStatusOrder(order)}
+                        title="Alterar status"
+                      >
+                        <ArrowRightLeft className="h-4 w-4" />
+                      </Button>
+
                       <Button
                         variant="ghost"
                         size="icon"
@@ -1064,6 +1130,33 @@ export function PurchaseOrders() {
         confirmLabel="Excluir"
         loading={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
+
+      {/* Approval Confirmation Dialog */}
+      <ConfirmDialog
+        open={!!approvingOrder}
+        onOpenChange={(o) => !o && setApprovingOrder(null)}
+        title={`Aprovar Pedido #${approvingOrder?.orderNumber}`}
+        description={`Deseja aprovar o pedido de compra no valor de ${
+          approvingOrder ? formatMoney(approvingOrder.finalValue || approvingOrder.initialValue) : ''
+        } para o fornecedor "${approvingOrder?.supplier.displayName}"? O status passará para Autorizado.`}
+        confirmLabel="Aprovar Pedido"
+        variant="default"
+        loading={approveMutation.isPending}
+        onConfirm={() =>
+          approvingOrder && approveMutation.mutate(approvingOrder.id)
+        }
+      />
+
+      {/* Status Transition Dialog */}
+      <StatusTransitionDialog
+        open={!!statusOrder}
+        onOpenChange={(o) => !o && setStatusOrder(null)}
+        order={statusOrder}
+        isLoading={statusMutation.isPending}
+        onConfirm={(orderId, newStatus) =>
+          statusMutation.mutate({ id: orderId, status: newStatus })
+        }
       />
     </div>
   );
