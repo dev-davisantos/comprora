@@ -212,12 +212,14 @@ CRUD  /suppliers
 CRUD  /purchase-orders
       POST   /purchase-orders/:id/approve      # status=AUTHORIZED + authorizationDate=now
       PATCH  /purchase-orders/:id/status       # transition status
-      GET    /purchase-orders                  # simple filters in query string
+      PUT    /purchase-orders/:id/projects     # replace N-N project links, recalculates realCost
+      GET    /purchase-orders                  # simple filters: status, supplierId, segmentId, projectId, month
 
 CRUD  /budgets
+      GET    /budgets/indicator?month=YYYY-MM  # planned vs. realized per week (weeks 1–5)
 
-GET   /dashboard                               # savings, spend by segment/project,
-                                               # budget planned vs realized
+GET   /dashboard?month=YYYY-MM                 # savings, spend by segment/project/supplier,
+                                               # budget planned vs. realized when month is given
 ```
 
 - Simple filters only in v1 (supplier, status, month... no complex nesting).
@@ -231,11 +233,11 @@ GET   /dashboard                               # savings, spend by segment/proje
 | Phase | Content | Status |
 |-------|---------|--------|
 | **0** | This `PLAN.md` | ✅ Done |
-| **1** | Nest project + TypeORM + SQLite (migrations), entities, enums, repositories, base DTOs, exception handling | ⬜ Pending |
-| **2** | Support CRUDs: segments, sectors, projects, suppliers | ⬜ Pending |
-| **3** | Purchase orders: free creation, approve, status transitions, N–N with projects | ⬜ Pending |
-| **4** | Budgets CRUD + planned vs. realized indicator | ⬜ Pending |
-| **5** | Dashboard / reports (savings, spend by segment/project) | ⬜ Pending |
+| **1** | Nest project + TypeORM + SQLite (migrations), entities, enums, repositories, base DTOs, exception handling | ✅ Done |
+| **2** | Support CRUDs: segments, sectors, projects, suppliers | ✅ Done |
+| **3** | Purchase orders: free creation, approve, status transitions, N–N with projects | ✅ Done |
+| **4** | Budgets CRUD + planned vs. realized indicator | ✅ Done |
+| **5** | Dashboard / reports (savings, spend by segment/project) | ✅ Done |
 | **6** | React frontend (PT-BR texts) — future | ⬜ Pending |
 
 > **Workflow:** one phase at a time. Each phase is implemented, validated (build/tests)
