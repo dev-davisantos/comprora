@@ -1,5 +1,3 @@
 @echo off
 setlocal
-cd /d "%~dp0"
-call npm run dev
-exit /b %errorlevel%
+call "%~dp0..\start-dev.bat"

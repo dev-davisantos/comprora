@@ -203,6 +203,8 @@ several projects.
 
 ## 6. Endpoints (REST)
 
+In the running application, all REST endpoints are prefixed with `/api`.
+
 ```
 CRUD  /segments
 CRUD  /sectors

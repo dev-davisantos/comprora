@@ -9,8 +9,10 @@ import { PurchaseOrderModule } from './purchase-order.module';
 import { SegmentModule } from './segment.module';
 import { SectorModule } from './sector.module';
 import { SupplierModule } from './supplier.module';
+import { HealthController } from './health.controller';
 
 @Module({
+  controllers: [HealthController],
   imports: [
     TypeOrmModule.forRoot(dataSourceOptions),
     DatabaseModule,
@@ -24,4 +26,3 @@ import { SupplierModule } from './supplier.module';
   ],
 })
 export class AppModule {}
-
