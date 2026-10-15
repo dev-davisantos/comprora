@@ -12,6 +12,11 @@ export interface CreateBudgetDto {
   plannedValue: DecimalString;
 }
 
+export interface CreateMonthlyBudgetDto {
+  monthYear: string;
+  monthlyValue: DecimalString;
+}
+
 export interface UpdateBudgetDto {
   monthYear?: string;
   week?: number;
@@ -21,12 +26,15 @@ export interface UpdateBudgetDto {
 export const budgetsApi = {
   list: (monthYear?: string) =>
     api.get<Budget[]>(
-      `/budgets${monthYear ? `?monthYear=${encodeURIComponent(monthYear)}` : ''}`,
+      `/budgets${monthYear ? `?month=${encodeURIComponent(monthYear)}` : ''}`,
     ),
 
   getById: (id: number) => api.get<Budget>(`/budgets/${id}`),
 
   create: (data: CreateBudgetDto) => api.post<Budget>('/budgets', data),
+
+  createMonthly: (data: CreateMonthlyBudgetDto) =>
+    api.post<Budget[]>('/budgets/monthly', data),
 
   update: (id: number, data: UpdateBudgetDto) =>
     api.patch<Budget>(`/budgets/${id}`, data),
@@ -38,4 +46,3 @@ export const budgetsApi = {
       `/budgets/indicator?month=${encodeURIComponent(month)}`,
     ),
 };
-

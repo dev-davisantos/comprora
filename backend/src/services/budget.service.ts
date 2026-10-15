@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { FindOptionsWhere } from 'typeorm';
-import { CreateBudgetDto, UpdateBudgetDto } from '../dto/budget.dto';
+import { DataSource, FindOptionsWhere } from 'typeorm';
+import { CreateBudgetDto, CreateMonthlyBudgetDto, UpdateBudgetDto } from '../dto/budget.dto';
 import { BusinessRuleException } from '../exception/business-rule.exception';
 import { OrderStatus } from '../database/enums/order-status.enum';
 import { Budget } from '../database/entities/budget.entity';
@@ -15,7 +15,48 @@ export class BudgetService {
   constructor(
     private readonly budgetRepository: BudgetRepository,
     private readonly orderRepository: PurchaseOrderRepository,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async createMonthly(dto: CreateMonthlyBudgetDto): Promise<Budget[]> {
+    const monthYear = toMonthStart(dto.monthYear);
+    const month = formatMonth(monthYear);
+    const existing = await this.budgetRepository.find({ where: { monthYear } });
+
+    if (existing.length > 0) {
+      throw new BusinessRuleException(
+        `A budget for ${month} already exists; edit the weekly values instead`,
+      );
+    }
+
+    const weekCount = Math.ceil(
+      new Date(Date.UTC(monthYear.getUTCFullYear(), monthYear.getUTCMonth() + 1, 0)).getUTCDate() / 7,
+    );
+    const totalCents = Math.round(Number(dto.monthlyValue) * 100);
+    const baseCents = Math.floor(totalCents / weekCount);
+    const remainderCents = totalCents % weekCount;
+    const budgets = Array.from({ length: weekCount }, (_, index) =>
+      this.budgetRepository.create({
+        monthYear,
+        week: index + 1,
+        plannedValue: (
+          (baseCents + (index < remainderCents ? 1 : 0)) /
+          100
+        ).toFixed(2),
+      }),
+    );
+
+    return this.dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(Budget);
+      const existingInTransaction = await repository.find({ where: { monthYear } });
+      if (existingInTransaction.length > 0) {
+        throw new BusinessRuleException(
+          `A budget for ${month} already exists; edit the weekly values instead`,
+        );
+      }
+      return repository.save(budgets);
+    });
+  }
 
   async create(dto: CreateBudgetDto): Promise<Budget> {
     const monthYear = toMonthStart(dto.monthYear);

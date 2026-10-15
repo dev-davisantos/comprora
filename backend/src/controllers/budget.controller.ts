@@ -11,7 +11,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { CreateBudgetDto, UpdateBudgetDto } from '../dto/budget.dto';
+import { CreateBudgetDto, CreateMonthlyBudgetDto, UpdateBudgetDto } from '../dto/budget.dto';
 import { Budget } from '../database/entities/budget.entity';
 import { BudgetIndicatorDto, BudgetService } from '../services/budget.service';
 
@@ -22,6 +22,13 @@ export class BudgetController {
   @Post()
   create(@Body() createBudgetDto: CreateBudgetDto): Promise<Budget> {
     return this.budgetService.create(createBudgetDto);
+  }
+
+  @Post('monthly')
+  createMonthly(
+    @Body() createMonthlyBudgetDto: CreateMonthlyBudgetDto,
+  ): Promise<Budget[]> {
+    return this.budgetService.createMonthly(createMonthlyBudgetDto);
   }
 
   /** `?month=YYYY-MM` filters by month. */

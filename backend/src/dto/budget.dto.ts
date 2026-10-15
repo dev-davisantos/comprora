@@ -17,4 +17,13 @@ export class CreateBudgetDto {
   plannedValue: string;
 }
 
+export class CreateMonthlyBudgetDto {
+  /** Month/year — always normalized to day 1 (e.g. 2026-10-01). */
+  @IsDateString()
+  monthYear: string;
+
+  @Matches(DECIMAL_12_2_REGEX, { message: DECIMAL_12_2_MESSAGE })
+  monthlyValue: string;
+}
+
 export class UpdateBudgetDto extends PartialType(CreateBudgetDto) {}

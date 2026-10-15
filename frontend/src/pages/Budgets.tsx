@@ -5,7 +5,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Pencil, Trash2, Wallet, Calendar } from 'lucide-react';
 
-import { budgetsApi, type CreateBudgetDto } from '@/api/endpoints/budgets';
+import {
+  budgetsApi,
+  type CreateBudgetDto,
+  type CreateMonthlyBudgetDto,
+} from '@/api/endpoints/budgets';
 import type { Budget } from '@/api/types';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/components/Toast';
@@ -13,7 +17,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
-import { MonthPicker } from '@/components/MonthPicker';
+import { MonthYearPicker } from '@/components/MonthYearPicker';
 import { MoneyInput } from '@/components/MoneyInput';
 import { BudgetWeeklyIndicator } from '@/components/BudgetWeeklyIndicator';
 import { Button } from '@/components/ui/button';
@@ -47,14 +51,35 @@ import { formatMoney } from '@/utils/format';
 // Schemas & Helpers
 // ---------------------------------------------------------------------------
 
-const budgetSchema = z.object({
-  monthYear: z.string().min(1, 'Mês de referência é obrigatório'),
-  week: z.coerce.number().min(1).max(5, 'Semana deve ser entre 1 e 5'),
-  plannedValue: z
-    .string()
-    .min(1, 'Valor planejado é obrigatório')
-    .refine((val) => !isNaN(Number(val)) && Number(val) >= 0, 'Valor inválido'),
-});
+const budgetSchema = z
+  .object({
+    mode: z.enum(['MONTHLY', 'WEEKLY']),
+    week: z.coerce.number().optional(),
+    monthlyValue: z.string().optional(),
+    plannedValue: z.string().optional(),
+  })
+  .superRefine((data, context) => {
+    const amount =
+      data.mode === 'MONTHLY' ? data.monthlyValue : data.plannedValue;
+    if (!amount || !/^\d{1,10}(\.\d{1,2})?$/.test(amount) || Number(amount) < 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Informe um valor válido com até duas casas decimais',
+        path: [data.mode === 'MONTHLY' ? 'monthlyValue' : 'plannedValue'],
+      });
+    }
+
+    if (
+      data.mode === 'WEEKLY' &&
+      (!data.week || data.week < 1 || data.week > 5)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Semana deve ser entre 1 e 5',
+        path: ['week'],
+      });
+    }
+  });
 
 type BudgetFormData = z.infer<typeof budgetSchema>;
 
@@ -74,8 +99,7 @@ export function Budgets() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Current selected month: default to current month YYYY-MM
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+  const [monthFilter, setMonthFilter] = useState<string>(() => {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -86,6 +110,13 @@ export function Budgets() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Budget | null>(null);
+  const weeksInSelectedMonth = Math.ceil(
+    new Date(
+      Number(monthFilter.slice(0, 4)),
+      Number(monthFilter.slice(5, 7)),
+      0,
+    ).getDate() / 7,
+  );
 
   // ---- Queries ------------------------------------------------------------
 
@@ -97,9 +128,8 @@ export function Budgets() {
     refetch: refetchIndicator,
     isFetching: isFetchingIndicator,
   } = useQuery({
-    queryKey: ['budgetIndicator', selectedMonth],
-    queryFn: () => budgetsApi.getIndicator(selectedMonth),
-    enabled: !!selectedMonth,
+    queryKey: ['budgetIndicator', monthFilter],
+    queryFn: () => budgetsApi.getIndicator(monthFilter),
   });
 
   const {
@@ -110,23 +140,24 @@ export function Budgets() {
     refetch: refetchBudgets,
     isFetching: isFetchingBudgets,
   } = useQuery({
-    queryKey: ['budgets', selectedMonth],
-    queryFn: () => budgetsApi.list(selectedMonth),
+    queryKey: ['budgets', monthFilter],
+    queryFn: () => budgetsApi.list(monthFilter),
   });
 
   // ---- Mutations ----------------------------------------------------------
 
   const createMutation = useMutation({
-    mutationFn: (data: CreateBudgetDto) => budgetsApi.create(data),
+    mutationFn: (data: CreateMonthlyBudgetDto) =>
+      budgetsApi.createMonthly(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
       queryClient.invalidateQueries({ queryKey: ['budgetIndicator'] });
-      toast('Meta de budget criada com sucesso');
+      toast('Budget mensal criado e distribuído entre as semanas');
       closeForm();
     },
     onError: (err) => {
       toast(
-        err instanceof ApiError ? err.message : 'Erro ao criar meta de budget',
+        err instanceof ApiError ? err.message : 'Erro ao criar budget mensal',
         'destructive',
       );
     },
@@ -172,16 +203,18 @@ export function Budgets() {
   const form = useForm<BudgetFormData>({
     resolver: zodResolver(budgetSchema),
     defaultValues: {
-      monthYear: selectedMonth,
-      week: 1,
+      mode: 'MONTHLY',
+      week: undefined,
+      monthlyValue: '0.00',
       plannedValue: '0.00',
     },
   });
 
   function openCreate() {
     form.reset({
-      monthYear: selectedMonth,
-      week: 1,
+      mode: 'MONTHLY',
+      week: undefined,
+      monthlyValue: '0.00',
       plannedValue: '0.00',
     });
     setEditingBudget(null);
@@ -189,10 +222,10 @@ export function Budgets() {
   }
 
   function openEdit(b: Budget) {
-    const monthPart = b.monthYear.slice(0, 7);
     form.reset({
-      monthYear: monthPart,
+      mode: 'WEEKLY',
       week: b.week,
+      monthlyValue: undefined,
       plannedValue: b.plannedValue,
     });
     setEditingBudget(b);
@@ -206,19 +239,19 @@ export function Budgets() {
   }
 
   function onSubmit(data: BudgetFormData) {
-    // Standardize to ISO date start of month
-    const isoDate = `${data.monthYear}-01T00:00:00.000Z`;
-
-    const payload: CreateBudgetDto = {
-      monthYear: isoDate,
-      week: Number(data.week),
-      plannedValue: data.plannedValue,
-    };
-
     if (editingBudget) {
-      updateMutation.mutate({ id: editingBudget.id, data: payload });
+      updateMutation.mutate({
+        id: editingBudget.id,
+        data: {
+          week: Number(data.week),
+          plannedValue: data.plannedValue!,
+        },
+      });
     } else {
-      createMutation.mutate(payload);
+      createMutation.mutate({
+        monthYear: `${monthFilter}-01T00:00:00.000Z`,
+        monthlyValue: data.monthlyValue!,
+      });
     }
   }
 
@@ -229,22 +262,22 @@ export function Budgets() {
       {/* Header with Month Selector & Create Button */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Orçamentos e Metas Semanais</h1>
+          <h1 className="text-2xl font-bold">Orçamentos e Metas Mensais</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Acompanhe o planejado versus realizado por semana de cada mês.
+            Defina o valor mensal e acompanhe sua distribuição e realização semanal.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="w-48">
-            <MonthPicker
-              value={selectedMonth}
-              onChange={(val) => setSelectedMonth(val || selectedMonth)}
+          <div className="w-64">
+            <MonthYearPicker
+              value={monthFilter}
+              onChange={setMonthFilter}
             />
           </div>
           <Button onClick={openCreate} className="gap-1.5 whitespace-nowrap">
             <Plus className="h-4 w-4" />
-            Nova Meta
+            Novo Budget
           </Button>
         </div>
       </div>
@@ -254,7 +287,7 @@ export function Budgets() {
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Calendar className="h-4 w-4 text-primary" />
           <span className="capitalize">
-            Indicador de {formatMonthDisplay(selectedMonth)}
+            Indicador de {formatMonthDisplay(monthFilter)}
           </span>
         </div>
 
@@ -274,7 +307,7 @@ export function Budgets() {
           <EmptyState
             icon={Calendar}
             title="Sem dados para este mês"
-            description="Cadastre metas semanais para acompanhar o planejado e o realizado."
+            description="Cadastre o valor mensal para acompanhar o planejado e o realizado por semana."
             className="p-6"
           />
         )}
@@ -284,7 +317,7 @@ export function Budgets() {
       <div className="space-y-3 pt-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">
-            Metas Semanais Cadastradas ({budgets.length})
+            Distribuição Semanal ({budgets.length} semanas)
           </h3>
         </div>
 
@@ -300,9 +333,9 @@ export function Budgets() {
         ) : budgets.length === 0 ? (
           <EmptyState
             icon={Wallet}
-            title="Nenhuma meta semanal cadastrada"
-            description={`Cadastre metas para ${formatMonthDisplay(selectedMonth)} e acompanhe o planejado.`}
-            actionLabel="Cadastrar meta semanal"
+            title="Nenhum budget cadastrado"
+            description={`Informe o valor mensal de ${formatMonthDisplay(monthFilter)} para gerar as metas semanais.`}
+            actionLabel="Cadastrar budget mensal"
             onAction={openCreate}
           />
         ) : (
@@ -363,82 +396,84 @@ export function Budgets() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingBudget ? 'Editar Meta de Budget' : 'Nova Meta de Budget'}
+              {editingBudget ? 'Editar Meta Semanal' : 'Criar Budget Mensal'}
             </DialogTitle>
             <DialogDescription>
-              Defina o valor planejado para a semana do mês selecionado.
+              {editingBudget
+                ? 'Altere o valor planejado desta semana.'
+                : `Informe o total mensal de ${formatMonthDisplay(monthFilter)}. O sistema dividirá o valor entre ${weeksInSelectedMonth} semanas.`}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Mês de Referência */}
-            <div className="space-y-1.5">
-              <Label htmlFor="monthYear">Mês de Referência</Label>
-              <Controller
-                control={form.control}
-                name="monthYear"
-                render={({ field }) => (
-                  <MonthPicker
-                    value={field.value}
-                    onChange={field.onChange}
-                  />
+            {/* Semana: only when editing a generated weekly budget */}
+            {editingBudget && (
+              <div className="space-y-1.5">
+                <Label htmlFor="week">Semana do Mês</Label>
+                <Controller
+                  control={form.control}
+                  name="week"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ? String(field.value) : '1'}
+                      onValueChange={(val) => field.onChange(Number(val))}
+                    >
+                      <SelectTrigger id="week">
+                        <SelectValue placeholder="Selecione a semana" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Semana 1</SelectItem>
+                        <SelectItem value="2">Semana 2</SelectItem>
+                        <SelectItem value="3">Semana 3</SelectItem>
+                        <SelectItem value="4">Semana 4</SelectItem>
+                        <SelectItem value="5">Semana 5</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {form.formState.errors.week && (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.week.message}
+                  </p>
                 )}
-              />
-              {form.formState.errors.monthYear && (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.monthYear.message}
-                </p>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Semana */}
+            {/* Monthly total on creation, weekly allocation on edit */}
             <div className="space-y-1.5">
-              <Label htmlFor="week">Semana do Mês</Label>
-              <Controller
-                control={form.control}
-                name="week"
-                render={({ field }) => (
-                  <Select
-                    value={field.value ? String(field.value) : '1'}
-                    onValueChange={(val) => field.onChange(Number(val))}
-                  >
-                    <SelectTrigger id="week">
-                      <SelectValue placeholder="Selecione a semana" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">Semana 1</SelectItem>
-                      <SelectItem value="2">Semana 2</SelectItem>
-                      <SelectItem value="3">Semana 3</SelectItem>
-                      <SelectItem value="4">Semana 4</SelectItem>
-                      <SelectItem value="5">Semana 5</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {form.formState.errors.week && (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.week.message}
-                </p>
+              <Label htmlFor={editingBudget ? 'plannedValue' : 'monthlyValue'}>
+                {editingBudget ? 'Valor Planejado da Semana' : 'Valor total mensal'}
+              </Label>
+              {editingBudget ? (
+                <Controller
+                  control={form.control}
+                  name="plannedValue"
+                  render={({ field }) => (
+                    <MoneyInput
+                      id="plannedValue"
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+              ) : (
+                <Controller
+                  control={form.control}
+                  name="monthlyValue"
+                  render={({ field }) => (
+                    <MoneyInput
+                      id="monthlyValue"
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
               )}
-            </div>
-
-            {/* Valor Planejado */}
-            <div className="space-y-1.5">
-              <Label htmlFor="plannedValue">Valor Planejado</Label>
-              <Controller
-                control={form.control}
-                name="plannedValue"
-                render={({ field }) => (
-                  <MoneyInput
-                    id="plannedValue"
-                    value={field.value}
-                    onChange={field.onChange}
-                  />
-                )}
-              />
-              {form.formState.errors.plannedValue && (
+              {(form.formState.errors.plannedValue ||
+                form.formState.errors.monthlyValue) && (
                 <p className="text-xs text-destructive">
-                  {form.formState.errors.plannedValue.message}
+                  {form.formState.errors.plannedValue?.message ||
+                    form.formState.errors.monthlyValue?.message}
                 </p>
               )}
             </div>
@@ -453,7 +488,7 @@ export function Budgets() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={isSaving}>
-                {isSaving ? 'Salvando…' : editingBudget ? 'Salvar' : 'Criar Meta'}
+                {isSaving ? 'Salvando…' : editingBudget ? 'Salvar' : 'Criar Budget'}
               </Button>
             </DialogFooter>
           </form>

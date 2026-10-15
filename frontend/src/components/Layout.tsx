@@ -21,16 +21,16 @@ const navItems = [
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-screen">
+    <div className="flex min-h-screen flex-col sm:h-screen sm:flex-row">
       {/* Sidebar */}
-      <aside className="flex w-60 flex-col border-r border-border bg-background">
+      <aside className="flex w-full shrink-0 flex-col border-b border-border bg-background sm:h-screen sm:w-60 sm:border-b-0 sm:border-r">
         <div className="border-b border-border px-4 py-4">
           <h1 className="text-lg font-bold text-primary">
-            Sistema de Compras
+            Comprora
           </h1>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 p-2">
+        <nav className="flex flex-row gap-1 overflow-x-auto p-2 sm:flex-1 sm:flex-col sm:overflow-visible">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -38,7 +38,7 @@ export function Layout({ children }: { children: ReactNode }) {
               end={to === '/'}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex shrink-0 flex-col items-center justify-center gap-1 rounded-md px-2 py-2 text-[11px] font-medium transition-colors sm:flex-row sm:justify-start sm:gap-3 sm:px-3 sm:text-sm',
                   isActive
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -53,8 +53,9 @@ export function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto p-6">{children}</main>
+      <main className="flex-1 p-4 sm:min-h-0 sm:overflow-auto sm:p-6">
+        {children}
+      </main>
     </div>
   );
 }
-
