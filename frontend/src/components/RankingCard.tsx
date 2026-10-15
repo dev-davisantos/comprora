@@ -86,3 +86,4 @@ export function RankingCard({
     </div>
   );
 }
+

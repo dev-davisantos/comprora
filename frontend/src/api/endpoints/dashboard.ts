@@ -7,3 +7,4 @@ export const dashboardApi = {
     return api.get<DashboardSummary>(`/dashboard${query}`);
   },
 };
+
