@@ -122,6 +122,7 @@ navegador em `http://127.0.0.1:4317`. O script de execução verifica
 
 Consulte também [DEPLOYMENT.md](./DEPLOYMENT.md) para os detalhes de
 empacotamento e distribuição.
+O passo a passo destinado ao usuário está em [INSTALACAO.md](./INSTALACAO.md).
 
 ## Dados e configuração
 

@@ -99,12 +99,41 @@ try {
   }
 
   Write-Host 'Creating the Windows installation package...'
-  if (-not (Get-Command tar.exe -ErrorAction SilentlyContinue)) {
-    throw 'Windows tar.exe is required to create the installation archive.'
-  }
-  & tar.exe -a -c -f $packageArchive -C $packageDirectory .
-  if ($LASTEXITCODE -ne 0) {
-    throw "Could not create the installation archive (exit code $LASTEXITCODE)."
+  Add-Type -AssemblyName System.IO.Compression
+  $archiveFile = [System.IO.File]::Open(
+    $packageArchive,
+    [System.IO.FileMode]::CreateNew,
+    [System.IO.FileAccess]::ReadWrite,
+    [System.IO.FileShare]::None
+  )
+  $archive = $null
+  try {
+    $archive = [System.IO.Compression.ZipArchive]::new(
+      $archiveFile,
+      [System.IO.Compression.ZipArchiveMode]::Create
+    )
+    Get-ChildItem -LiteralPath $packageDirectory -File -Recurse -Force | ForEach-Object {
+      $relativePath = $_.FullName.Substring($packageDirectory.Length)
+      $entryName = $relativePath.TrimStart([char[]]@('\', '/')).Replace('\', '/')
+      $entry = $archive.CreateEntry(
+        $entryName,
+        [System.IO.Compression.CompressionLevel]::Optimal
+      )
+      $source = [System.IO.File]::OpenRead($_.FullName)
+      $destination = $entry.Open()
+      try {
+        $source.CopyTo($destination)
+      } finally {
+        $destination.Dispose()
+        $source.Dispose()
+      }
+    }
+  } finally {
+    if ($archive) {
+      $archive.Dispose()
+    } else {
+      $archiveFile.Dispose()
+    }
   }
   Write-Host "Installation package created: $packageArchive"
 } finally {
