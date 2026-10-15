@@ -4,6 +4,7 @@ import { orderStatusLabels } from '@/utils/labels';
 import { formatMoney } from '@/utils/format';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -19,12 +20,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { parseApprovalDate } from '@/utils/orderDate';
 
 interface StatusTransitionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: PurchaseOrder | null;
-  onConfirm: (orderId: number, newStatus: OrderStatus) => void;
+  onConfirm: (
+    orderId: number,
+    newStatus: OrderStatus,
+    authorizationDate?: string,
+  ) => void;
   isLoading?: boolean;
 }
 
@@ -44,6 +50,8 @@ export function StatusTransitionDialog({
   isLoading = false,
 }: StatusTransitionDialogProps) {
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus>('AUTHORIZED');
+  const [approvalDateInput, setApprovalDateInput] = useState('');
+  const [approvalDateError, setApprovalDateError] = useState('');
 
   useEffect(() => {
     if (order) {
@@ -56,6 +64,8 @@ export function StatusTransitionDialog({
         CANCELLED: 'PENDING',
       };
       setSelectedStatus(nextSuggested[order.status] || 'AUTHORIZED');
+      setApprovalDateInput('');
+      setApprovalDateError('');
     }
   }, [order]);
 
@@ -66,6 +76,20 @@ export function StatusTransitionDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedStatus && selectedStatus !== order.status) {
+      if (selectedStatus === 'AUTHORIZED') {
+        const authorizationDate = parseApprovalDate(
+          approvalDateInput,
+          order.issueDate.slice(0, 10),
+        );
+        if (!authorizationDate) {
+          setApprovalDateError(
+            `Informe uma data válida no formato DD/MM, no ano ${order.issueDate.slice(0, 4)}.`,
+          );
+          return;
+        }
+        onConfirm(order.id, selectedStatus, authorizationDate);
+        return;
+      }
       onConfirm(order.id, selectedStatus);
     }
   };
@@ -112,6 +136,38 @@ export function StatusTransitionDialog({
             </Select>
           </div>
 
+          {selectedStatus === 'AUTHORIZED' && (
+            <div className="space-y-1.5">
+              <label
+                htmlFor="transitionAuthorizationDate"
+                className="text-sm font-medium leading-none"
+              >
+                Data de aprovação (DD/MM)
+              </label>
+              <Input
+                id="transitionAuthorizationDate"
+                inputMode="numeric"
+                placeholder="DD/MM"
+                maxLength={5}
+                value={approvalDateInput}
+                onChange={(event) => {
+                  setApprovalDateInput(event.target.value);
+                  setApprovalDateError('');
+                }}
+                aria-invalid={!!approvalDateError}
+              />
+              <p className="text-xs text-muted-foreground">
+                O ano será o mesmo da emissão do pedido (
+                {order.issueDate.slice(0, 4)}).
+              </p>
+              {approvalDateError && (
+                <p className="text-xs text-destructive" role="alert">
+                  {approvalDateError}
+                </p>
+              )}
+            </div>
+          )}
+
           {isCancelling && (
             <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive">
               <strong>Atenção:</strong> Cancelar este pedido impedirá novas
@@ -141,4 +197,3 @@ export function StatusTransitionDialog({
     </Dialog>
   );
 }
-

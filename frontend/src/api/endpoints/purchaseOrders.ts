@@ -16,6 +16,7 @@ export interface PurchaseOrderFilters {
 }
 
 export interface CreatePurchaseOrderDto {
+  orderNumber: number;
   issueDate: string;
   segmentId: number;
   sectorId?: number | null;
@@ -32,6 +33,7 @@ export interface CreatePurchaseOrderDto {
 }
 
 export interface UpdatePurchaseOrderDto {
+  orderNumber?: number;
   issueDate?: string;
   segmentId?: number;
   sectorId?: number | null;
@@ -69,13 +71,21 @@ export const purchaseOrdersApi = {
 
   remove: (id: number) => api.delete(`/purchase-orders/${id}`),
 
-  approve: (id: number) =>
-    api.post<PurchaseOrder>(`/purchase-orders/${id}/approve`, {}),
+  approve: (id: number, authorizationDate: string) =>
+    api.post<PurchaseOrder>(`/purchase-orders/${id}/approve`, {
+      authorizationDate,
+    }),
 
-  updateStatus: (id: number, status: OrderStatus) =>
-    api.patch<PurchaseOrder>(`/purchase-orders/${id}/status`, { status }),
+  updateStatus: (
+    id: number,
+    status: OrderStatus,
+    authorizationDate?: string,
+  ) =>
+    api.patch<PurchaseOrder>(`/purchase-orders/${id}/status`, {
+      status,
+      ...(authorizationDate ? { authorizationDate } : {}),
+    }),
 
   updateProjects: (id: number, projectIds: number[]) =>
     api.put<PurchaseOrder>(`/purchase-orders/${id}/projects`, { projectIds }),
 };
-

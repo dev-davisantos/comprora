@@ -9,6 +9,15 @@ import { DECIMAL_12_2_MESSAGE, DECIMAL_12_2_REGEX } from './validation';
 export class ChangeStatusDto {
   @IsEnum(OrderStatus)
   status: OrderStatus;
+
+  @IsOptional()
+  @IsDateString()
+  authorizationDate?: string;
+}
+
+export class ApprovePurchaseOrderDto {
+  @IsDateString()
+  authorizationDate: string;
 }
 
 /** Body of `PUT /purchase-orders/:id/projects` — replaces the linked projects. */

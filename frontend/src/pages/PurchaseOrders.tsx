@@ -41,7 +41,7 @@ import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusTransitionDialog } from '@/components/StatusTransitionDialog';
-import { MonthPicker } from '@/components/MonthPicker';
+import { MonthYearPicker } from '@/components/MonthYearPicker';
 import { MoneyInput } from '@/components/MoneyInput';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -77,12 +77,17 @@ import {
   paymentConditionLabels,
   serviceTypeLabels,
 } from '@/utils/labels';
+import { parseApprovalDate } from '@/utils/orderDate';
 
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
 
 const orderFormSchema = z.object({
+  orderNumber: z.coerce
+    .number()
+    .int('O número do pedido deve ser inteiro')
+    .min(1, 'Número do pedido (Protheus) é obrigatório'),
   issueDate: z.string().min(1, 'Data de emissão é obrigatória'),
   supplierId: z.coerce.number().min(1, 'Selecione um fornecedor'),
   requester: z.string().min(1, 'Solicitante é obrigatório'),
@@ -121,12 +126,19 @@ export function PurchaseOrders() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const currentMonth = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  })();
+
   // Filters State
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [supplierFilter, setSupplierFilter] = useState<string>('ALL');
   const [segmentFilter, setSegmentFilter] = useState<string>('ALL');
   const [projectFilter, setProjectFilter] = useState<string>('ALL');
-  const [monthFilter, setMonthFilter] = useState<string>('');
+  const [monthFilter, setMonthFilter] = useState<string>(currentMonth);
+  const [approvalDateInput, setApprovalDateInput] = useState('');
+  const [approvalDateError, setApprovalDateError] = useState('');
 
   // Dialog State
   const [formOpen, setFormOpen] = useState(false);
@@ -149,14 +161,14 @@ export function PurchaseOrders() {
     supplierFilter !== 'ALL' ||
     segmentFilter !== 'ALL' ||
     projectFilter !== 'ALL' ||
-    !!monthFilter;
+    monthFilter !== currentMonth;
 
   function clearFilters() {
     setStatusFilter('ALL');
     setSupplierFilter('ALL');
     setSegmentFilter('ALL');
     setProjectFilter('ALL');
-    setMonthFilter('');
+    setMonthFilter(currentMonth);
   }
 
   // ---- Queries ------------------------------------------------------------
@@ -211,6 +223,7 @@ export function PurchaseOrders() {
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
+      orderNumber: 0,
       issueDate: '',
       supplierId: 0,
       requester: '',
@@ -252,6 +265,7 @@ export function PurchaseOrders() {
   const createMutation = useMutation({
     mutationFn: async (data: OrderFormData) => {
       const payload: CreatePurchaseOrderDto = {
+        orderNumber: Number(data.orderNumber),
         issueDate: data.issueDate,
         supplierId: Number(data.supplierId),
         requester: data.requester,
@@ -292,6 +306,7 @@ export function PurchaseOrders() {
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: OrderFormData }) => {
       const payload: UpdatePurchaseOrderDto = {
+        orderNumber: Number(data.orderNumber),
         issueDate: data.issueDate,
         supplierId: Number(data.supplierId),
         requester: data.requester,
@@ -346,7 +361,8 @@ export function PurchaseOrders() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: number) => purchaseOrdersApi.approve(id),
+    mutationFn: ({ id, authorizationDate }: { id: number; authorizationDate: string }) =>
+      purchaseOrdersApi.approve(id, authorizationDate),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -363,8 +379,15 @@ export function PurchaseOrders() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: OrderStatus }) =>
-      purchaseOrdersApi.updateStatus(id, status),
+    mutationFn: ({
+      id,
+      status,
+      authorizationDate,
+    }: {
+      id: number;
+      status: OrderStatus;
+      authorizationDate?: string;
+    }) => purchaseOrdersApi.updateStatus(id, status, authorizationDate),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['purchaseOrders'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -386,6 +409,7 @@ export function PurchaseOrders() {
 
   function openCreate() {
     form.reset({
+      orderNumber: 0,
       issueDate: new Date().toISOString().slice(0, 10),
       supplierId: suppliers[0]?.id || 0,
       requester: '',
@@ -408,6 +432,7 @@ export function PurchaseOrders() {
     const linkedProjectIds = order.orderProjects?.map((op) => op.project.id) || [];
 
     form.reset({
+      orderNumber: order.orderNumber,
       issueDate: toDateInput(order.issueDate),
       supplierId: order.supplier.id,
       requester: order.requester,
@@ -438,6 +463,31 @@ export function PurchaseOrders() {
     } else {
       createMutation.mutate(data);
     }
+  }
+
+  function openApproval(order: PurchaseOrder) {
+    setApprovalDateInput('');
+    setApprovalDateError('');
+    setApprovingOrder(order);
+  }
+
+  function submitApproval() {
+    if (!approvingOrder) return;
+    const authorizationDate = parseApprovalDate(
+      approvalDateInput,
+      toDateInput(approvingOrder.issueDate),
+    );
+    if (!authorizationDate) {
+      setApprovalDateError(
+        `Informe uma data válida no formato DD/MM, no ano ${approvingOrder.issueDate.slice(0, 4)}.`,
+      );
+      return;
+    }
+    setApprovalDateError('');
+    approveMutation.mutate({
+      id: approvingOrder.id,
+      authorizationDate,
+    });
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
@@ -479,7 +529,7 @@ export function PurchaseOrders() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {/* Status Filter */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">
@@ -571,12 +621,11 @@ export function PurchaseOrders() {
           {/* Month Filter */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">
-              Mês de Emissão
+              Mês e ano de emissão
             </label>
-            <MonthPicker
+            <MonthYearPicker
               value={monthFilter}
               onChange={setMonthFilter}
-              placeholder="Selecione o mês"
             />
           </div>
         </div>
@@ -756,7 +805,7 @@ export function PurchaseOrders() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-                          onClick={() => setApprovingOrder(order)}
+                          onClick={() => openApproval(order)}
                           title="Aprovar pedido"
                         >
                           <CheckCircle2 className="h-4 w-4" />
@@ -832,6 +881,22 @@ export function PurchaseOrders() {
           )}
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="orderNumber">Número do pedido (Protheus)</Label>
+              <Input
+                id="orderNumber"
+                type="number"
+                min="1"
+                step="1"
+                {...form.register('orderNumber')}
+              />
+              {form.formState.errors.orderNumber && (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.orderNumber.message}
+                </p>
+              )}
+            </div>
+
             {/* Linha 1: Emissão e Fornecedor */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -1211,21 +1276,73 @@ export function PurchaseOrders() {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />
 
-      {/* Approval Confirmation Dialog */}
-      <ConfirmDialog
+      {/* Approval Dialog */}
+      <Dialog
         open={!!approvingOrder}
         onOpenChange={(o) => !o && setApprovingOrder(null)}
-        title={`Aprovar Pedido #${approvingOrder?.orderNumber}`}
-        description={`Deseja aprovar o pedido de compra no valor de ${
-          approvingOrder ? formatMoney(approvingOrder.finalValue || approvingOrder.initialValue) : ''
-        } para o fornecedor "${approvingOrder?.supplier.displayName}"? O status passará para Autorizado.`}
-        confirmLabel="Aprovar Pedido"
-        variant="default"
-        loading={approveMutation.isPending}
-        onConfirm={() =>
-          approvingOrder && approveMutation.mutate(approvingOrder.id)
-        }
-      />
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Aprovar Pedido #{approvingOrder?.orderNumber}
+            </DialogTitle>
+            <DialogDescription>
+              Informe a data de aprovação do Protheus (DD/MM). O sistema usará
+              o ano da emissão do pedido.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              {approvingOrder?.supplier.displayName} ·{' '}
+              {approvingOrder &&
+                formatMoney(
+                  approvingOrder.finalValue || approvingOrder.initialValue,
+                )}
+            </p>
+            <Label htmlFor="authorizationDate">Data de aprovação</Label>
+            <Input
+              id="authorizationDate"
+              inputMode="numeric"
+              placeholder="DD/MM"
+              maxLength={5}
+              value={approvalDateInput}
+              onChange={(event) => {
+                setApprovalDateInput(event.target.value);
+                setApprovalDateError('');
+              }}
+              aria-invalid={!!approvalDateError}
+              aria-describedby={
+                approvalDateError ? 'authorizationDateError' : undefined
+              }
+            />
+            {approvalDateError && (
+              <p
+                id="authorizationDateError"
+                className="text-xs text-destructive"
+              >
+                {approvalDateError}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setApprovingOrder(null)}
+              disabled={approveMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={submitApproval}
+              disabled={approveMutation.isPending}
+            >
+              {approveMutation.isPending ? 'Aprovando…' : 'Aprovar Pedido'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Status Transition Dialog */}
       <StatusTransitionDialog
@@ -1233,8 +1350,12 @@ export function PurchaseOrders() {
         onOpenChange={(o) => !o && setStatusOrder(null)}
         order={statusOrder}
         isLoading={statusMutation.isPending}
-        onConfirm={(orderId, newStatus) =>
-          statusMutation.mutate({ id: orderId, status: newStatus })
+        onConfirm={(orderId, newStatus, authorizationDate) =>
+          statusMutation.mutate({
+            id: orderId,
+            status: newStatus,
+            ...(authorizationDate ? { authorizationDate } : {}),
+          })
         }
       />
     </div>

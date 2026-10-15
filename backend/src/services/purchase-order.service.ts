@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { FindOptionsWhere } from 'typeorm';
-import { ChangeStatusDto, CreatePurchaseOrderDto, SetProjectsDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
+import { ApprovePurchaseOrderDto, ChangeStatusDto, CreatePurchaseOrderDto, SetProjectsDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
 import { BusinessRuleException } from '../exception/business-rule.exception';
 import { OrderStatus } from '../database/enums/order-status.enum';
 import { OrderProject } from '../database/entities/order-project.entity';
@@ -192,10 +192,13 @@ export class PurchaseOrderService {
   }
 
   /**
-   * `POST /purchase-orders/:id/approve` — sets AUTHORIZED + authorizationDate = now.
+   * `POST /purchase-orders/:id/approve` — sets AUTHORIZED with the supplied date.
    * Only PENDING orders can be approved.
    */
-  async approve(id: number): Promise<PurchaseOrder> {
+  async approve(
+    id: number,
+    dto: ApprovePurchaseOrderDto,
+  ): Promise<PurchaseOrder> {
     const order = await this.findOne(id);
 
     if (order.status !== OrderStatus.PENDING) {
@@ -205,7 +208,7 @@ export class PurchaseOrderService {
     }
 
     order.status = OrderStatus.AUTHORIZED;
-    order.authorizationDate = new Date();
+    order.authorizationDate = this.toAuthorizationDate(order, dto.authorizationDate);
 
     return this.orderRepository.save(order);
   }
@@ -230,9 +233,12 @@ export class PurchaseOrderService {
 
     order.status = dto.status;
 
-    // Authorization date is stamped on any path that authorizes the order.
+    // Require an explicit approval date on every path that authorizes the order.
     if (dto.status === OrderStatus.AUTHORIZED) {
-      order.authorizationDate = new Date();
+      if (!dto.authorizationDate) {
+        throw new BusinessRuleException('Authorization date is required to authorize an order');
+      }
+      order.authorizationDate = this.toAuthorizationDate(order, dto.authorizationDate);
     }
 
     const saved = await this.orderRepository.save(order);
@@ -243,6 +249,23 @@ export class PurchaseOrderService {
     }
 
     return saved;
+  }
+
+  private toAuthorizationDate(order: PurchaseOrder, input: string): Date {
+    const date = new Date(input);
+    if (Number.isNaN(date.getTime())) {
+      throw new BusinessRuleException('Authorization date must be a valid date');
+    }
+
+    if (date.getUTCFullYear() !== order.issueDate.getUTCFullYear()) {
+      throw new BusinessRuleException(
+        'Authorization date must be in the same year as the order issue date',
+      );
+    }
+
+    return new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+    );
   }
 
   /**

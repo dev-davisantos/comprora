@@ -12,7 +12,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { ChangeStatusDto, CreatePurchaseOrderDto, SetProjectsDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
+import { ApprovePurchaseOrderDto, ChangeStatusDto, CreatePurchaseOrderDto, SetProjectsDto, UpdatePurchaseOrderDto } from '../dto/purchase-order.dto';
 import { PurchaseOrder } from '../database/entities/purchase-order.entity';
 import { PurchaseOrderService } from '../services/purchase-order.service';
 
@@ -41,10 +41,13 @@ export class PurchaseOrderController {
     return this.purchaseOrderService.findOne(id);
   }
 
-  /** Sets status = AUTHORIZED and authorizationDate = now. */
+  /** Sets status = AUTHORIZED using the supplied approval date. */
   @Post(':id/approve')
-  approve(@Param('id', ParseIntPipe) id: number): Promise<PurchaseOrder> {
-    return this.purchaseOrderService.approve(id);
+  approve(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() approvePurchaseOrderDto: ApprovePurchaseOrderDto,
+  ): Promise<PurchaseOrder> {
+    return this.purchaseOrderService.approve(id, approvePurchaseOrderDto);
   }
 
   /** Moves the order through PENDING → AUTHORIZED → DELIVERED → INVOICED (or CANCELLED). */
